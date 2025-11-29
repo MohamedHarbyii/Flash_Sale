@@ -16,10 +16,6 @@ class ProductFactory extends Factory
      */
     public function definition(): array
     {
-        return [
-            'name'=>"flash sale product",
-            'stock'=>10,
-            'price'=>100.00
-        ];
+        return [];
     }
 }

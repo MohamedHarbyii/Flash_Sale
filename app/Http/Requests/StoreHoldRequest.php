@@ -11,7 +11,7 @@ class StoreHoldRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return false;
+        return true;
     }
 
     /**
@@ -22,7 +22,8 @@ class StoreHoldRequest extends FormRequest
     public function rules(): array
     {
         return [
-            //
+            'product_id'=>'required',
+            'qty'=>'required'
         ];
     }
 }

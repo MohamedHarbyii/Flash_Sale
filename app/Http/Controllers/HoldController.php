@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\CreateHold;
 use App\Models\Hold;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreHoldRequest;
@@ -30,7 +31,7 @@ class HoldController extends Controller
      */
     public function store(StoreHoldRequest $request)
     {
-        //
+        return   CreateHold::Create($request->product_id,$request->qty);
     }
 
     /**
