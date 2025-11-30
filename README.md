@@ -1,59 +1,51 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# ⚡ Laravel Flash Sale API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A high-concurrency API designed to handle flash sales with strict inventory control. It guarantees **no overselling**, supports **short-lived holds**, and handles **idempotent payments**.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 🧠 Assumptions & Invariants Enforced
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### 1. Concurrency Control (The "No Overselling" Rule)
+* **Invariant:** Product stock must never drop below zero, regardless of traffic load.
+* **Enforcement:**
+    * **Pessimistic Locking (`lockForUpdate`):** Applied critically during `Hold` creation and `Order` processing. This forces parallel requests to queue at the database level, preventing race conditions.
+    * **Atomic Transactions:** All state changes (Stock deduction + Hold creation) occur within a single database transaction.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### 2. Inventory Holds (Temporary Reservation)
+* **Assumption:** A "Hold" reserves stock for exactly **2 minutes**.
+* **Lifecycle:**
+    * **Active:** Stock is deducted immediately upon Hold creation.
+    * **Expired:** If not converted to an Order, a scheduled background job (`HoldRelease`) releases the stock back to the pool every minute.
+    * **Converted:** When an Order is created, the Hold is deleted to prevent double usage.
 
-## Learning Laravel
+### 3. Payment Safety (Idempotency)
+* **Invariant:** A single payment transaction ID must strictly be processed once.
+* **Enforcement:**
+    * **Unique Constraint:** The `payments` table enforces a unique `transaction_id`.
+    * **Check-First Pattern:** The webhook endpoint verifies existence before processing. Duplicate webhooks return `200 OK` instantly without side effects.
+    * **Restocking on Failure:** If a payment fails or an order is cancelled, stock is immediately returned to the database.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+---
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## 🚀 How to Run the App
 
-## Laravel Sponsors
+### 1. Setup Environment
+```bash
+# Clone and install dependencies
+git clone <repo_url>
+cd flash_sale
+composer install
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+# Environment configuration
+cp .env.example .env
+php artisan key:generate
 
-### Premium Partners
-
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
-
-## Contributing
-
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+# Database Setup (Ensure MySQL is running)
+# Update .env with your DB credentials first
+php artisan migrate --seed
+2. Run the Server & Background WorkersYou need two terminals running:Terminal 1: The API ServerBashphp artisan serve
+Terminal 2: The Scheduler (For Hold Expiry)This runs the cleanup job to release expired stock.Bashphp artisan schedule:work
+🧪 How to Run TestsPrerequisitesCreate a dedicated testing database named flash_sale_testing in your MySQL.1. Run Logic & Feature TestsCovers hold creation, expiry logic, and webhook idempotency.Bashphp artisan test
+2. Run Concurrency Stress Test (The "Race" Test)A custom command simulating 30 concurrent requests competing for limited stock.Goal: Prove that stock reaches exactly 0 without negative values.Command: (Ensure server is running on port 8000)Bashphp artisan test:race
+📊 Logs & MetricsThe system uses structured logging for observability.Log LocationLogs are written to the daily channel to avoid clutter:Path: storage/logs/laravel.log (or flash_sale.log if configured).Key Metrics to WatchSearch the logs for these tags to monitor system health:[INFO] ✅ Payment Success: Successful transactions.[INFO] ♻️ Duplicate Webhook ignored: Evidence of idempotency protection.[WARNING] 📉 Out of Stock hit: Indicates high contention on a product.[INFO] 🔄 Released hold: Evidence of the background worker cleaning up expired holds.🔗 API ReferenceMethodEndpointPayloadDescriptionGET/api/products/{id}-Get product details (Cached).POST/api/holds{ "product_id": 1, "quantity": 1 }Create a 2-minute stock reservation.POST/api/orders{ "hold_id": "ULID..." }Convert a hold into a pending order.POST/api/payments/webhook{ "transaction_id": "...", "status": "success" }Handle payment callbacks.

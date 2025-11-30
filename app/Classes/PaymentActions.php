@@ -25,10 +25,10 @@ class PaymentActions
 
         return
             DB::transaction(function () use ($data) {
-                $order = order::where('id', $data['order_id'])->lockForUpdate()->first();
+                $order = order::where('id', $data['order_id'])->lockForUpdate()->firstOrFail();
                 if($order['status']==PaymentStatus::Cancelled) {return;}
                 $payment=PaymentDB::store(['transaction_id'=>$data['transaction_id'],'order_id'=>$data['order_id']]);
-                OrderDB::UpdateStatus($order, PaymentStatus::Payed);
+                OrderDB::UpdateStatus($order, PaymentStatus::Paid);
 
                 return $payment;
 
@@ -45,7 +45,7 @@ class PaymentActions
 
         return
             DB::transaction(function () use ($data) {
-                $order = order::where('id', $data['order_id'])->lockForUpdate()->first();
+                $order = order::where('id', $data['order_id'])->lockForUpdate()->firstOrFail();
                 if($order['status']==PaymentStatus::Cancelled) {return;}
                 $payment=PaymentDB::store(['transaction_id'=>$data['transaction_id'],'order_id'=>$data['order_id']]);
                 OrderDB::UpdateStatus($order, PaymentStatus::Cancelled);

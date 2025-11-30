@@ -72,6 +72,13 @@ return [
             'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
         ],
+        'flash_sales'=> [
+            'driver'=>'daily',
+            'path'=>storage_path('logs/flash_sales'),
+            'level'=>'debug',
+            'days'=>14
+            
+        ],
 
         'slack' => [
             'driver' => 'slack',
