@@ -1,4 +1,4 @@
-# ⚡ Laravel Flash Sale — Interview README (≤ 2 pages)
+# Laravel Flash Sale
 
 ---
 
