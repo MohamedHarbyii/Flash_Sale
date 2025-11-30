@@ -2,13 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Classes\CreateHold;
-use App\Http\Requests\StoreHoldRequest;
-use App\Http\Requests\UpdateHoldRequest;
-use App\Http\Resources\HoldResource;
+use App\Classes\HoldDB;
+use App\Classes\OrderDB;
+use App\Models\order;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreorderRequest;
+use App\Http\Requests\UpdateorderRequest;
+use App\Http\Resources\OrderResource;
+use App\Jobs\HoldRelease;
 use App\Models\Hold;
+use App\PaymentStatus;
 
-class HoldController extends Controller
+class OrderController extends Controller
 {
     /**
      * Display a listing of the resource.
@@ -29,16 +34,16 @@ class HoldController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(StoreHoldRequest $request)
+    public function store(StoreorderRequest $request)
     {
-        $hold=  CreateHold::Create($request->product_id,$request->quantity);
-        return response()->json(['data'=>new HoldResource($hold)],201);
+        $order=OrderDB::create($request->validated());
+        return new OrderResource($order) ;
     }
 
     /**
      * Display the specified resource.
      */
-    public function show(Hold $hold)
+    public function show(order $order)
     {
         //
     }
@@ -46,7 +51,7 @@ class HoldController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(Hold $hold)
+    public function edit(order $order)
     {
         //
     }
@@ -54,7 +59,7 @@ class HoldController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(UpdateHoldRequest $request, Hold $hold)
+    public function update(UpdateorderRequest $request, order $order)
     {
         //
     }
@@ -62,7 +67,7 @@ class HoldController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Hold $hold)
+    public function destroy(order $order)
     {
         //
     }
