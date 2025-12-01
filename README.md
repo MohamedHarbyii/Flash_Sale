@@ -73,10 +73,10 @@ API (from routes/api.php)
 Example cURL — create a hold
 curl -s -X POST http://127.0.0.1:8000/api/holds \
   -H "Content-Type: application/json" \
-  -d '{"product_id":1,"quantity":1,"user_id":123}'
+  -d '{"product_id":1,"quantity":1,}'
 
-Example cURL — payment webhook (idempotent)
-curl -s -X POST http://127.0.0.1:8000/api/payments/webhook \
+ payment webhook 
+ http://127.0.0.1:8000/api/payments/webhook 
   -H "Content-Type: application/json" \
   -d '{"transaction_id":"txn_abc","order_id":1,"status":"success"}'
 
