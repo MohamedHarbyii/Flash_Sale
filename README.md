@@ -38,8 +38,9 @@ Environment
 - php artisan key:generate
 - Edit .env for DB and queue/log settings:
   - DB_CONNECTION, DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD
-  - QUEUE_CONNECTION (sync | database | redis)
-  - LOG_CHANNEL
+  - QUEUE_CONNECTION (database )
+  - LOG_CHANNEL (daily)
+  - CACHE_STORE (redis)
 
 Database & seed
 - php artisan migrate --seed
@@ -47,7 +48,7 @@ Database & seed
 Run the app + scheduler (two terminals)
 - Terminal A (API): php artisan serve
 - Terminal B (scheduler for Hold expiry): php artisan schedule:work
-Terminal C (queue work) run: php artisan queue:work
+- Terminal C (queue work) run: php artisan queue:work
 
 Tests
 - Create a test DB (e.g., flash_sale_testing) and set DB_* in phpunit.xml or .env.testing.
