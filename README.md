@@ -1,82 +1,103 @@
-# Laravel Flash Sale
+# Laravel Flash Sale System ⚡
+
+A robust, high-concurrency Flash Sale system designed to handle high-traffic inventory reservation and purchasing without overselling.
+
+## 1. Assumptions & Invariants
+
+The system is built upon strict rules to ensure data integrity during concurrent requests:
+
+### 🛡️ No Overselling (Inventory Integrity)
+* **Invariant:** Product stock can never drop below zero.
+* **Mechanism:** Stock deduction and "Hold" creation occur atomically. The system utilizes database locking (likely `lockForUpdate` in the underlying logic) to serialize concurrent requests for the same product, ensuring that `stock` is only decremented if sufficient quantity exists.
+* **Verification:** Validated via the `php artisan test:race` concurrency stress test.
+
+### ⏳ Temporary Inventory Holds (TTL)
+* **Assumption:** Items added to a cart/hold are reserved temporarily.
+* **Lifecycle:**
+    1.  **Reserve:** User requests a hold -> Stock is decremented immediately -> `Hold` record created with an `expires_at` timestamp.
+    2.  **Release:** If the hold is not converted to an Order before expiration, the `HoldRelease` job returns the quantity to the product's stock and deletes the hold record.
+
+### 💳 Payment Idempotency
+* **Invariant:** A specific payment transaction (Webhook) is processed exactly once.
+* **Mechanism:** The `PaymentController` checks if the `transaction_id` already exists in the database. Duplicate webhooks are ignored and logged as "processed before" to prevent double billing or order status corruption.
 
 ---
 
-1) Assumptions & invariants enforced
+## 2. How to Run the App & Tests
 
-- No overselling
-  - Invariant: product.stock must never drop below 0.
-  - How enforced: stock deduction + hold creation happen atomically (CreateHold operation used by HoldController). Critical stock updates are protected by database transactions and row-level locking (lockForUpdate) in the hold/order flows.
+### 🚀 Application Setup
 
-- Short-lived inventory reservation (Holds)
-  - Assumption: a Hold is a temporary reservation (project default: 2 minutes).
-  - Lifecycle:
-    - POST /api/holds deducts stock immediately and creates a Hold (expires_at set).
-    - If converted to an Order (POST /api/orders) the Hold is consumed and removed.
-    - Expired Holds are released by a scheduled job (HoldRelease) which returns stock to the product.
+1.  **Install Dependencies:**
+    ```bash
+    composer install
+    ```
+2.  **Environment Setup:**
+    ```bash
+    cp .env.example .env
+    php artisan key:generate
+    # Configure your DB_DATABASE, DB_USERNAME, etc. in .env
+    ```
+3.  **Database Migration & Seeding:**
+    ```bash
+    php artisan migrate --seed
+    ```
+4.  **Start Background Queue (Crucial):**
+    The system relies on queue workers to release expired stock.
+    ```bash
+    php artisan queue:work
+    ```
+5.  **Start the Server:**
+    ```bash
+    php artisan serve
+    ```
 
-- Payment idempotency
-  - Invariant: a payment transaction_id is applied only once.
-  - How enforced: PaymentController checks PaymentDB::HasTransaction($transaction_id) and ignores duplicate webhooks (logs and returns without side effects). A UNIQUE constraint on payments.transaction_id is recommended/expected.
+### 🧪 Running Tests
 
-- Failure safety
-  - Failed payments or manual cancellations restore stock (release the hold or increment product stock) within transactional flows.
+**1. Functional & Feature Tests:**
+Run the standard test suite (Pest/PHPUnit) to verify business logic, including hold expiry and webhook idempotency.
+```bash
+php artisan test
+# OR
+./vendor/bin/pest
+```
+**2\. Concurrency / Race Condition Test:** A custom Artisan command is available to simulate high-concurrency traffic (Race Conditions).
 
----
+-   **Prerequisite:** Ensure the server is running (`php artisan serve`) at `http://127.0.0.1:8000`.
+    
+-   **Run the stress test:**
+    
+    Bash
+    
+        php artisan test:race
+    
+-   **What it does:** It resets the database, creates a product with limited stock (e.g., 10 items), and fires concurrent HTTP requests (e.g., 30 requests) to ensure the final stock is exactly 0 and no overselling occurred.
+    
 
-2) How to run the app and tests (exact commands)
+* * *
 
-Prereqs: PHP 8.2+, Composer, MySQL (or the DB set in .env)
+## 3\. Logs & Metrics (Observability)
 
-Clone & install
-- git clone https://github.com/MohamedHarbyii/Flash_Sale.git
-- cd Flash_Sale
-- composer install
+### 📂 Application Logs
 
-Environment
-- cp .env.example .env
-- php artisan key:generate
-- Edit .env for DB and queue/log settings:
-  - DB_CONNECTION, DB_HOST, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD
-  - QUEUE_CONNECTION (database )
-  - LOG_CHANNEL (daily)
-  - CACHE_STORE (redis)
+The system logs critical events to specific channels for auditing and debugging.
 
-Database & seed
-- php artisan migrate --seed
+-   **Location:** `storage/logs/laravel.log` (or a dedicated `flash_sales.log` if configured in `config/logging.php`).
+    
+-   **What to look for:** The `PaymentController` explicitly logs to the `flash_sales` channel:
+    
+    -   `✅ Payment Success: {transaction_id}`
+        
+    -   `❌ Payment Failed: {transaction_id}`
+        
+    -   `♻️ Duplicate Webhook ignored: {transaction_id}`.
+        
 
-Run the app + scheduler (two terminals)
-- Terminal A (API): php artisan serve
-- Terminal B (scheduler for Hold expiry): php artisan schedule:work
-- Terminal C (queue work) run: php artisan queue:work
+### 📊 Performance Metrics
 
-Tests
-- Create a test DB (e.g., flash_sale_testing) and set DB_* in phpunit.xml or .env.testing.
-- Run tests: php artisan test  (or vendor/bin/phpunit)
-- Concurrency/stress checks: run php artisan test:race
-- Use those to validate “no overselling” under concurrent requests.
+For immediate feedback on system performance under load, use the output from the **Concurrency Test**:
 
----
-
-3) Where to see logs & metrics
-
-Logs
-- u can see logs in the daily log I made logs/flash_sale
----
-
-API (from routes/api.php)
-- GET  /api/product/{id}        → ProductController@show (returns via cache layer)
-- POST /api/holds               → HoldController@store (payload: product_id, quantity, optional user_id)
-- POST /api/orders              → OrderController@store (create order)
-- POST /api/payments/webhook    → PaymentController@store (payload: transaction_id, order_id, status)
-
-Example cURL — create a hold
-curl -s -X POST http://127.0.0.1:8000/api/holds \
-  -H "Content-Type: application/json" \
-  -d '{"product_id":1,"quantity":1,}'
-
- payment webhook 
- http://127.0.0.1:8000/api/payments/webhook 
-  -H "Content-Type: application/json" \
-  -d '{"transaction_id":"txn_abc","order_id":1,"status":"success"}'
-
+-   **Successful requests:** Number of users who successfully secured stock.
+    
+-   **Failed requests:** Number of users rejected due to "Out of Stock".
+    
+-   **Final Stock:** Should match the expected invariant (0).
